@@ -1,0 +1,58 @@
+---
+title: "607_Assignment1"
+author: 'jfor: Josh Forster'
+date: "2022-09-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Data607 Assignment 1: Examine FiveThirtyEight Dataset
+
+###Introduction
+The FiveThirtyEight article (https://projects.fivethirtyeight.com/redlining/) and dataset chosen for further review in R covers the current state of housing segregation in many US cities. The data is used to show how many of the redlined neighborhoods from the 1930s in metropolitan and surrounding areas remain highly segregated mirroring the initial discriminatory policies meant to prevent black, latino, and other minorities from living in certain communities in the US. The location quotient shows the proportion of a race in a given area compared to the larger metropolitan area with values higher than 1 meaning greater levels of racial concentration in a smaller area and vice versa.
+
+#### Load Raw CSV File from Github Repo
+```{r }
+library(tidyverse)
+
+file_path = 'https://raw.githubusercontent.com/fivethirtyeight/data/master/redlining/metro-grades.csv'
+
+df <- read.table(file_path,header = TRUE,sep = ',')
+
+colnames(df)
+
+```
+
+### Subset Relevant columns of dataset
+#### excluding gross counts that are used for percentages
+```{r}
+sub_df <- subset(df, select = c("metro_area","holc_grade","pct_white","pct_black","pct_hisp","pct_asian","pct_other"      ,"lq_white","lq_black","lq_hisp","lq_asian","lq_other"))
+
+```
+
+### Rename Columns for clarity and Replace rankings with descriptive values
+```{r}
+#based on rename_with documentation and this link (https://cmdlinetips.com/2022/03/how-to-replace-multiple-column-names-of-a-dataframe-with-tidyverse/)
+sub_df <- sub_df %>% rename_with(function(rename){gsub('lq','location_quotient',rename)})
+sub_df <- sub_df %>% rename_with(function(rename){gsub('pct','percent',rename)})
+sub_df <- sub_df %>% rename(homeowners_loan_corp = holc_grade)
+
+sub_df$homeowners_loan_corp[which(sub_df$homeowners_loan_corp=='A')] <- "Best"
+sub_df$homeowners_loan_corp[which(sub_df$homeowners_loan_corp=='B')] <- "Desirable"
+sub_df$homeowners_loan_corp[which(sub_df$homeowners_loan_corp=='C')] <- "Declining"
+sub_df$homeowners_loan_corp[which(sub_df$homeowners_loan_corp=='D')] <- "Hazardous"
+head(sub_df)
+```
+
+
+###Exploratory Bar Chart
+The initial bar graph shown below is meant to preliminary explore if there are still higher concentrations of white populations in the most favorably rating neighborhoods even after so many years after redlining was banned. The initial takeaway is that white populations represent higher proportions in the two higher ratings neighborhoods and that there may still be persistent segregated neighborhoods. The article does a good job of mixing graphics and analysis to further this point.
+```{r}
+avg_bar <- ggplot(sub_df,aes(x=homeowners_loan_corp,y=location_quotient_white))+stat_summary(fun = 'mean',geom='bar')
+avg_bar + ggtitle('Average percent of 2020 white population by original ranking of neighborhood')+xlab('Original Area Ranking')+ylab('Average Percent of White Residents')
+```
+
+###Findings and Recommendations: 
+Although there is valuable data included within this dataset only the names of the regions are provided without coordinates that would be most useful for graphing map data within R. It would be interesting to explore this analysis further incorporating that information to plot it on a map and potentially drill into the regions not specifically referenced in the article. Another additional data point to enhance the analysis  would be property values or mortgage approval rates to further hone in on the disparity across neighborhoods.
