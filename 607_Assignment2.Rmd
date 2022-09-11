@@ -1,0 +1,125 @@
+---
+title: "Data607_Assignment2"
+author: 'jfor: Josh Forster'
+date: "2022-09-11"
+params:
+  dbusername: 
+    label: "username"
+    value: ""
+    input: text
+  dbpassword: 
+    label: "password"
+    value: ""
+    input: password
+  dbschema: 
+    label: "schema"
+    value: ""
+    input: text
+  dbhost:
+    lable: "host"
+    value: ""
+    input: text
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+## Assignment 2: SQL and R
+
+#### The purpose of this R script is to demonstrate loading data directly from a MYSQL database as an alternative input source. When opening in RStudio this file will prompt you for the following fields (database username, database password, database schema, database host) that will be needed to access the replicated movie ratings schema in MYSQL.
+
+#### Load Requisite Packages:
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(RMySQL)
+library(rstudioapi)
+library(tidyverse)
+```
+
+## Query MYSQL Database
+
+#### This chunk is only functional in RStudio as it will utilize the prompts from the user to provide their username/password to avoid exposing credentials to pull the correct query from a MYSQL database
+```{r load authentication credentials}
+#params: https://stackoverflow.com/questions/68796204/prompt-for-connection-string-in-sql-chunk-within-rmarkdown
+#utilized this source for prompts: https://rviews.rstudio.com/2019/03/21/how-to-avoid-publishing-credentials-in-your-code/
+#username <- rstudioapi::askForPassword('MYSQL Database username')
+#password <- rstudioapi::askForPassword('MYSQL Database password')
+#db <- rstudioapi::askForPassword('MYSQL Schema Name')
+#host <- rstudioapi::askForPassword('MYSQL host name')
+
+local_db <- dbConnect(MySQL(), user=params$dbusername, password=params$dbpassword, dbname=params$dbschema, host=params$dbhost)
+
+query <-
+'SELECT r.reviewer, r.movie_id, r.rating, m.movie_name,m.genre,m.source 
+FROM MOVIE_RATINGS.MOVIE_RATINGS as r 
+LEFT JOIN MOVIE_RATINGS.MOVIES as m 
+ON r.movie_id = m.movie_id;'
+
+ratings <- dbGetQuery(local_db, query)
+```
+#### The query separated the attributes related to the movies table from the ratings source so that any information related to the movie can easily be updated in one location and pulled in accordingly with the foriegn key referenced in the movie_ratings table. If there was more complicated information tracked on reviewers, it would also have a separate table and reference a foreign key to implement normalization.
+
+##Reviewing the Summary of the dataframe
+```{r}
+summary(ratings)
+```
+There are 18 null values of the 42 records in the ratings column which we will explore further in the next chunks to accurately account for these missing data points. There is only one numeric column, rating, which is tracking the response scaled value of the reviewers and given that it is missing ~40% of the data it will obviously impact any statistics calculated.
+
+## Histogram of the Ratings Information excluding NAs
+#### Distribution of the Reviewers Ratings
+
+```{r}
+ggplot(data=subset(ratings, !is.na(rating)), aes(x=rating)) + 
+geom_histogram()
+```
+Most of the ratings that were provided appear to be 3 which is the middle rating of "average". Both the mean and median are approximately the same value and for the responses provided the data appears to be unimodal.
+
+## Average Rating of Movies
+#### Dplyr excluding NA values to allow for proper aggregation
+```{r excluding nulls from initial analysis}
+avg_ratings <- ratings %>% 
+    group_by(movie_name) %>%
+    summarise(mean_ratings = mean(rating,na.rm=TRUE),
+              non_na_counts=sum(!is.na(rating)))
+
+
+bar_ratings <- ggplot(data = avg_ratings, aes(x = reorder(movie_name,-mean_ratings), y = mean_ratings,fill=movie_name) ) + geom_bar(stat = "identity") +
+geom_text(aes(label = non_na_counts), vjust = 2,color='white')
+bar_ratings <- bar_ratings + labs(title = "Average Polled Ratings of Recent Movies", 
+       subtitle = 'Scale of 1 to 5 (5 is best) and label represents non-na values',
+       caption = "Data source: texted responses",
+       x = "Recent Movies Surveyed", y = "Average Rating of Movie (excluding na)")
+
+
+```
+## Displaying alternative na treatment within bar plot
+#### Showing breakdown of which movies surveyed were seen by reviewers
+```{r}
+ratings <- ratings %>%
+    mutate(has_seen = ifelse(is.na(rating),'Seen','Not Seen'))
+
+most_watched <- ratings %>% 
+    group_by(movie_name,has_seen) %>%
+    summarise(totals = n())
+
+reviewer_watches <- ratings %>%
+    group_by(reviewer,has_seen) %>%
+    summarise(counts = n())
+
+
+most_watched_bar <- ggplot(data = most_watched, aes(x = movie_name,y=totals,fill=has_seen)) + geom_bar(stat='identity') +
+#geom_col(position = "dodge") +
+# need to research how to correctly position labels as stat_summary did not seem to work
+geom_text(aes(label = as.character(round(totals/7,2)*100)), vjust = 1.5, color = "white")
+
+most_watched_bar
+
+reviewer_stats <- ggplot(reviewer_watches, aes(x=reviewer,y=counts,fill=has_seen))+
+geom_bar(stat = 'identity')
+
+reviewer_stats
+```
+Most of the reviewers have seen about half of the movies surveyed in this poll. It would be interesting to see how this statistic changes over time with additional reviewers incorporated into the poll.
+
+If further statistical analysis were to be conducted, it would likely be valuable to normalize the data to minimize the impact of higher ratings. It would also be helpful to survey more reviewers of these movies to try to get a more representative sample of potential consumers to  identify inferential qualities of the data of any specific category.
