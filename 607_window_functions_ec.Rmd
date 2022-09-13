@@ -1,0 +1,42 @@
+---
+title: "607_Window_Functions_EC"
+author: 'jfor: Josh Forster'
+date: "2022-09-12"
+output: html_document
+---
+### Load Libraries
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(RcppRoll)
+```
+
+## R Markdown
+
+
+####Load Google and Tesla prices over past year (rolling 12 Month Window)
+
+```{r }
+goog <- read.csv('https://raw.githubusercontent.com/jforster19/DATA607/main/GOOG.csv',colClasses=c("Date",rep("numeric",6)))
+tsla <- read.csv('https://raw.githubusercontent.com/jforster19/DATA607/main/TSLA.csv',colClasses=c("Date",rep("numeric",6)))
+```
+
+
+### Use window functions (in SQL or dplyr) to calculate the year-to-date average and the six-day moving averages for each item.
+```{r pressure, echo=FALSE}
+
+#found package for 6 day moving windows/based on tidyverse guidance https://datacornering.com/running-moving-rolling-average-in-r-dplyr/
+goog$symbol <- 'GOOG'
+tsla$symbol <- 'TSLA'
+stocks <- bind_rows(goog,tsla)
+
+stocks <- stocks %>%
+    select(symbol, Date,Close) %>%
+    group_by(symbol) %>%
+    arrange(Date) %>%
+    mutate(mov_avg=cummean(Close),
+           six_day_movavg = roll_mean(Close,n = 6, align = "right", fill = NA)) %>%
+    arrange(symbol,Date)
+stocks           
+```
+The moving average calculation uses RCppRoll to get the rolling window of time that is needed, while the cumulative ytd average is calculated with dplyr.
