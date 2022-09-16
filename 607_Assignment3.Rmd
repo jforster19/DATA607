@@ -1,0 +1,106 @@
+---
+title: "Data607_Assignment3"
+author: 'jfor: Josh Forster'
+date: "2022-09-14"
+output:
+  html_document: default
+  pdf_document: default
+---
+#### Data607: Assignment 3 String Manipulation & RegEx
+
+#### Load R Libraries
+
+```{r setup}
+#knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+```
+
+
+#### Pull the appropriate majors from the FiveThirtyEight list
+
+
+#1. Using the 173 majors listed in fivethirtyeight.com’s College Majors dataset [https://fivethirtyeight.com/features/the-economic-guide-to-picking-a-college-major/], provide code that identifies the majors that contain either "DATA" or "STATISTICS"
+
+```{r cars}
+raw_file = 'https://raw.githubusercontent.com/fivethirtyeight/data/master/college-majors/majors-list.csv'
+majors <- as_tibble(read.csv(raw_file))
+majors_sub <- majors %>% 
+    mutate(matched_name = str_match(Major,'.*DATA.*|.*STATISTICS.*')) %>%
+    select(Major,matched_name) %>%
+    filter(!is.na(matched_name))
+majors_sub
+```
+
+#### Tranform string data
+
+#2 Write code that transforms the data below:
+
+[1] "bell pepper"  "bilberry"     "blackberry"   "blood orange"
+[5] "blueberry"    "cantaloupe"   "chili pepper" "cloudberry"  
+[9] "elderberry"   "lime"         "lychee"       "mulberry"    
+[13] "olive"        "salal berry"
+
+c("bell pepper", "bilberry", "blackberry", "blood orange", "blueberry", "cantaloupe", "chili pepper", "cloudberry", "elderberry", "lime", "lychee", "mulberry", "olive", "salal berry")
+
+```{r}
+#2 Write code that transforms the data below:
+str1 <- '[1] "bell pepper"  "bilberry"     "blackberry"   "blood orange"'
+str2 <- '[5] "blueberry"    "cantaloupe"   "chili pepper" "cloudberry"  '
+str3 <-'[9] "elderberry"   "lime"         "lychee"       "mulberry"    '
+str4 <- '[13] "olive"        "salal berry"'
+#Into a format like this:  character vector
+clean_str_vec <-function(str_ex) {
+    # 1) Replace all of the one or more repeated spaces that are starting and ending with double quotes
+    # 2) Replace any characters that aren't letters, pipe, or spaces with blanks
+    # 3) Break the string on pipe character into an k sized list based on number of pipe characters
+    # 4) Combine lists into an atomic vector
+    unlist(str_split(str_trim(str_replace_all(str_replace_all(str_ex,'\\"\\s{1,}\\"','\\|'),'[^a-z\\|\\s]','')),"\\|"))
+}
+new_format_vec <- str_sort(c(clean_str_vec(str1),clean_str_vec(str2),clean_str_vec(str3),clean_str_vec(str4)))
+
+new_format_vec
+```
+
+Provided a more detailed description of each step within the nested functions to clean and prepare the string for this transformation in the function. This will also be helpful reference after some times away from the code to reorient myself with the flow of each part of the syntax.
+
+#### Explain the Regex patterns in plain english
+
+#3 Describe, in words, what these expressions will match:
+
+1. (.)\1\1 Regular expression not represented in string format that has the same character repeated 3 times
+
+2. "(.)(.)\\2\\1" #This will match two characters that appear once and then in reverse order
+
+3. (..)\1 Regular expression not represented in string format that has two characters repeated twice in the same order
+
+4. "(.).\\1.\\1" # This will match a character with the first character repeated in the 3rd and 5th positions with any characters permitted in the other positions except a newline
+
+5. "(.)(.)(.).*\\3\\2\\1" This pattern will match 3 characters that are following by zero or more characters and then have the pattern in reverse order
+
+
+```{r echo=TRUE}
+
+test_vec <- c('aaa','bbbght','abba','1221','yxyx','zrzrjlk','13171','abaza','123djakfl;jdafkjad321','abccba')
+str_match(test_vec, "(.)\\1\\1") #1
+str_match(test_vec,"(.)(.)\\2\\1") #2
+str_match(test_vec,"(..)\\1") #3
+str_match(test_vec,"(.).\\1.\\1") #4 
+str_match(test_vec,"(.)(.)(.).*\\3\\2\\1") #5
+```
+Grouped the example strings into two different variations of string patterns to verify that the regex was working as understood and also modified the non-string expression to be compiled by R.
+
+#### Apply Regex to string patterns
+
+#4 Construct regular expressions to match words that:
+
+```{r}
+reg_test <- c('abracadabra','racecar','noon ','zoo','churches','mississippi','missuszi','eleven','baaaseball')
+#1. Start and end with the same character.
+str_match(reg_test,'^(.).*\\1$')
+#2 Contain a repeated pair of letters (e.g. "church" contains "ch" repeated twice.)
+str_match(reg_test,'(..).*\\1')
+#3 Contain one letter repeated in at least three places (e.g. "eleven" contains three "e"s.)
+str_match(reg_test,'(.).*\\1.*\\1')
+```
+Included a few different examples that would satisfy the conditions specified for the homework
