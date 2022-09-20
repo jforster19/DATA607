@@ -1,0 +1,108 @@
+---
+title: 'Data 607: Project 1'
+author: 'jfor: Josh Forster'
+date: "2022-09-16"
+output: html_document
+---
+## Project 1: Chess Tournament Clean Up
+
+
+#### Load Required Libraries for R Markdown
+
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+## Load Input Data
+
+
+#### The data was initially linked to the blackboard cloud storage, but after refresh it appears that an active authentication token is needed to access the file in that source and was copied into Github for reproducible reference.
+```{r load data}
+
+fp = 'https://raw.githubusercontent.com/jforster19/DATA607/main/chess_input.txt'
+
+d <- read_lines(fp,skip=1)
+
+```
+The file was a non-delimited txt that did not have any clear separators and will require vectorized string manipulation/wrangling in order to collect the appropriate data points as requested in the assignment. The first line was skipped as it was only a separator with repeated dashes and that pattern is used to create visual boxes around each chess player's statistics in the tournament; however, this formatting does not lend itself to processing and will need to be cleaned up for use in the assignment.
+
+#### Parse column headers and build generic function that cleans the strings as found in this specific file structure
+
+```{r echo=TRUE}
+txt_data_list <- str_split(d,'\n')
+parsed_data <-function(str_ex) {
+    values <- c(sapply(str_split(str_ex,'\\|'), trimws))
+    values <- values[-length(values)]
+}
+
+first_col_nm <- parsed_data(txt_data_list[[1]])
+
+second_col_nm <- parsed_data(txt_data_list[[2]])
+
+base_col_headers <- c(first_col_nm[1:2],paste(first_col_nm[3:length(first_col_nm)], second_col_nm[3:length(first_col_nm)]))
+extra_col_headers <- c(second_col_nm[1:2],'Pair')
+
+```
+Across all of the rows the same pattern was apparent as the header and detail rows all were delimited by the pipe character and then needed further trimming to eliminate leading and trailing spaces. This formatting made it simple enough to apply a function that would create a list of the elements needed for the analysis.
+
+
+#### Load the chess results data into a structured format
+
+```{r pressure, echo=TRUE}
+vals <- sapply(txt_data_list[seq(1,length(txt_data_list),3)],parsed_data)
+chess_results <- as.data.frame(t(vals[,seq(2,ncol(vals))]))
+colnames(chess_results) <- base_col_headers
+extra_detail <- sapply(txt_data_list[seq(2,length(txt_data_list),3)],parsed_data)
+chess_detail <- as.data.frame(t(extra_detail[1:2,2:ncol(extra_detail)]))
+chess_detail$Pair <- rownames(chess_detail)
+colnames(chess_detail) <- extra_col_headers
+chess_detail <- chess_detail %>% rename(player_state=Num)
+# separate out the initial number rating that occurred after : and before the optional P and the post rating which was numbers after ->
+chess_detail <- chess_detail |> mutate(pre_rating = str_replace(`USCF ID / Rtg (Pre->Post)`,'.+\\:\\s+(\\d+)[P]?[0-9]{0,}\\s*[\\-\\>].+','\\1'),
+                                       post_rating= str_replace(str_extract(`USCF ID / Rtg (Pre->Post)`, '[\\-\\>]\\s*(\\d+)'),"\\>","")) |>
+    select(-`USCF ID / Rtg (Pre->Post)`)
+chess_set <- inner_join(chess_results,chess_detail,by=c('Pair'='Pair'))
+```
+
+The approach with this assignment was to parse the header detail separately from the underlying data and then update the column names in the dataframe with the original titling. Initially it seemed that it would require a looping process to access each underlying string; however, the vectorized iterator apply functions solved the job in an easier and simpler way. Under each player's name there was an additional row that was mostly extraneous information for this review, but it was fairly easy to pull in the relevant columns and join  on the row with most of the player data.
+
+#### Lengthen results to more easily parse out opponent identifiers for average opponent rating
+
+```{r}
+chess_long <- chess_results |>
+    select(starts_with(c("Round",'Pair'))) |>
+    #select(c('Pair','Round 1','Round 2','Round 3','Round 4','Round 5','Round 6','Round 7')) |>
+    pivot_longer(!Pair,names_to = 'rounds',values_to='matchups') |>
+    mutate(result = str_trim(str_replace(matchups,'[\\d\\s]+','')),
+           opponent = str_trim(str_replace(matchups,'[^0-9]','')))
+chess_long_opp <- inner_join(chess_long,chess_detail,by=c('opponent'='Pair')) |>
+    group_by(Pair) |>
+    select(Pair,pre_rating) |>
+    mutate(avg_opp_rating = mean(as.double(pre_rating),na.rm=TRUE)) |>
+    distinct(avg_opp_rating)
+
+final_output_set <- inner_join(chess_set,chess_long_opp,by=c('Pair'='Pair'),keep=FALSE) |>
+    select(c('Pair','Player Name','player_state','Total Pts','pre_rating','avg_opp_rating')) |>
+    rename(player_name = 'Player Name',total_points='Total Pts') |>
+    arrange(desc(avg_opp_rating))
+
+write.csv(final_output_set,file='chess_results.csv')
+head(final_output_set,n=5)
+```
+
+Given every row was read as a character it seemed easiest to lengthen the columns with round matchups in columns into one so only one join was needed to pull in each opponent's pre-tournament rating and then one could easily average the numeric values of this one column. Pulling back in the aggregated statistic we see that the first player on the txt file had the highest average competition
+
+
+#### Summary Scatterplot
+#### Review relationship between pre-ratings and opponent ratings
+```{r}
+ggplot(final_output_set,aes(x=as.integer(pre_rating),y=avg_opp_rating)) + 
+    geom_point() + geom_hline(yintercept = mean(final_output_set$avg_opp_rating)) +
+    geom_smooth(method = 'lm') + labs(title = "Pre Ratings vs. Average Opponent Ratings", 
+       subtitle = 'Do players with higher ratings face tougher competition?',
+       caption = "Basic Linear Best fit is plotted as is intercept at mean opposition rating",
+       x = "Player Pre-Rating", y = "Average Opposition Rating")
+```
+
+There isn't a clear linear pattern as there is more variability in the opposition ratings for the average pre tournament rating (1318), but a number of the higher ranked players coming into the recorded dataset did have higher ranked opponents; however, there will be diminishing returns for highly ranked defeats of weaker ranked players per Elo ratings methodology.
