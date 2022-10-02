@@ -1,0 +1,121 @@
+---
+title: 'Assignment 6: Working with Tidy data'
+author: 'jfor: Josh Forster'
+date: "2022-10-02"
+output: html_document
+---
+#### Load libraries needed to run analysis
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+
+
+#### Read in flights dataset
+```{r}
+fp = 'https://raw.githubusercontent.com/jforster19/DATA607/main/assignment6_input%20-%20Sheet1.csv'
+input <- read_csv(fp,col_name=c('AIRLINE','STATUS','LOS ANGELES','PHOENIX','SAN DIEGO','SAN FRANCISCO','SEATTLE'))
+head(input)
+```
+
+
+#### Preliminary Cleaning to be able to analyze data
+1) Convert to Tibble
+2) Filter extra blank rows
+3) Fill down (default direction) to mark rows with correct airlines
+
+```{r}
+df_extra_wide <- as_tibble(input) |>
+    filter(!is.na(STATUS)) |>
+    fill(AIRLINE)
+head(df_extra_wide)
+ggplot(df_extra_wide,aes(x=AIRLINE))+stat_summary(fun='mean',geom='bar',aes(y=PHOENIX))
+```
+
+While the wide format allows you to separately visualize different patterns within one city, it is much easier to lengthen all of the city columns into one to more easily compare and review all of the destinations particularly given the smaller size of this input. It also will make it easier to review cities without having to remember each one by name as you can more easily summarize on that one field.
+
+#### Pivoting Wide to Long Datasets
+
+```{r}
+df_long <- df_extra_wide |>
+    pivot_longer(col=!starts_with(c('AIRLINE','STATUS')),names_to = 'CITIES',values_to='NUM_FLIGHTS',values_transform = list(NUM_FLIGHTS=as.numeric))
+df_wide <- df_long |>
+    pivot_wider(names_from=STATUS,values_from=NUM_FLIGHTS)
+names(df_wide)<- make.names(names(df_wide),unique=TRUE)
+df_wide
+```
+The data set in my opinion lends itself to this long format at least initially that can allow a user to to filter easily on any of the column values while also making it easier to visualize a comparison of the two airlines. In the next plots, I will attempt to explore the distribution of the data as well some interesting comparative points between each airline. The chunk also includes a wide transformation given there was only one numeric variable that will allow for a scatterplot to be used.
+
+#### Scatterplots comparing counts of on-time vs delayed flights
+
+```{r}
+ggplot(df_wide,aes(x=ON.TIME,y=DELAYED,color=AIRLINE))+
+    geom_point(aes(shape=CITIES))
+
+df_wide %>%
+    filter(DELAYED<=300 | ON.TIME <=1000) %>%
+ggplot(aes(x=ON.TIME,y=DELAYED,color=AIRLINE)) +
+    geom_point(aes(shape=CITIES))
+```
+
+Given that Alaska and Amwest flew to one destination (Seattle and Phoenix) to a much greater degree than other destinations in this dataset, those two data points are excluded from the second scatterplot as well as two additional cities to be able to more easily review the pattern and shape of the remaining flights. There isn't a clear linear pattern depicted based on the limited values available.
+
+
+#### Breakout of Status for each Carrier
+
+```{r}
+#label adjustment: https://www.geeksforgeeks.org/how-to-change-the-order-of-bars-in-bar-chart-in-r/
+# label positioning: https://r-graphics.org/recipe-bar-graph-labels
+
+df_long |>
+    filter(AIRLINE=='ALASKA') |>
+    ggplot(aes(x=reorder(CITIES,-NUM_FLIGHTS),y=NUM_FLIGHTS,fill=STATUS)) +
+    geom_bar(stat='identity',position='dodge')+
+    geom_text(aes(label = NUM_FLIGHTS),color='black',size=3,position=position_dodge(.9))+
+    theme(axis.text.x = element_text(angle=45,hjust=0.9))+ 
+    labs(x='CITIES', title='Breakdown of Flights by City for Alaska Airlines')
+
+df_long |>
+    filter(AIRLINE=='AMWEST') |>
+    ggplot(aes(x=reorder(CITIES,-NUM_FLIGHTS),y=NUM_FLIGHTS,fill=STATUS)) +
+    geom_bar(stat='identity',position='dodge')+
+    geom_text(aes(label = NUM_FLIGHTS),color='black',size=3,position=position_dodge(.9))+
+    theme(axis.text.x = element_text(angle=45,hjust=0.9))+ 
+    labs(x='CITIES',title='Breakdown of Flights by City for Amwest Airlines')
+
+```
+
+The graphs depict for each airline the different counts by airport for their status; however, it doesn't make too much sense to combine the two airlines as the sort won't be consistent given each carrier has substantially different percentage breakdown of these routes.
+
+#### On-Time Percentages by Airline
+
+```{r}
+df_long |>
+    group_by(AIRLINE,CITIES) |>
+    arrange(AIRLINE,CITIES) |>
+    mutate(PERC_FLIGHTS = NUM_FLIGHTS/sum(NUM_FLIGHTS)) |>
+    filter(STATUS=='ON TIME') |>
+    ggplot(aes(x=reorder(CITIES,-PERC_FLIGHTS),y=PERC_FLIGHTS,fill=AIRLINE)) +
+        geom_bar(stat='identity',position='dodge') +
+        geom_text(aes(label=as.character(round(PERC_FLIGHTS*100,2))),color='white',size=3,vjust=1.5,position=position_dodge(.9)) +
+        labs(title= 'Percentage of Flights on Time by Airline',y='CITIES',x='PERCENTAGE OF FLIGHTS ON TIME')
+
+```
+
+This visual does a much better job comparing the on-time performance of each airline. Alaska appears to beat out AMWEST in each city that they fly to in this dataset in terms of percentage of on-time flights. The percentage does a slightly better job to eliminate the difference in gross totals across airline and airport
+
+#### BoxPlot for more statistics on the spread of the flights
+
+```{r}
+df_long |>
+    filter(NUM_FLIGHTS<=1000) |>
+    ggplot(aes(x=AIRLINE, y=NUM_FLIGHTS))+
+    geom_boxplot(aes(color=STATUS))
+```
+
+Using a boxplot gives a viewer some useful information when comparing the two airline performance when it comes to arrival status. While the mean values are fairly close to one another for on-time flights, there is more variability within AMWEST data and a slight higher number of delays across all airports. 
+
+
+Overall, despite the limited data points available there is still a good amount of tidying and analysis that can be done to review shape, patterns, and other trends within the data.
