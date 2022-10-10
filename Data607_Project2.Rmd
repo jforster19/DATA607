@@ -1,0 +1,210 @@
+---
+title: "Data607_Project2"
+author: 'jfor: Josh Forster'
+date: "10/6/2022"
+output: html_document
+---
+
+
+#### Project 2: Tidy Data
+
+#### Load Libraries
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(reshape2)
+```
+
+
+
+#### Loading files from Github
+
+Initial file prep (i.e. skipping extraneous lines)
+```{r load_files}
+gdp_fp <- 'https://raw.githubusercontent.com/jforster19/DATA607/main/qtrly_gdp%2001.2020%20-%2006.2022.csv'
+gsa_fp <- 'https://raw.githubusercontent.com/jforster19/DATA607/main/FY2022_PerDiemMasterRatesFile.csv'
+zg_fp <- 'https://raw.githubusercontent.com/jforster19/DATA607/main/smooth_monthly_median_price%2012.2018%20-%2008.2022.csv'
+gdp <- read_csv(gdp_fp,skip=4,show_col_types=FALSE)
+gdp <- gdp |>
+    rename(category =`...2`) |>
+    mutate(category = ifelse(lag(category) %in%   c('Exports','Imports'),paste(lag(category),category,sep='_'),ifelse(lag(category,n=2) %in% c('Exports','Imports'),paste(lag(category,n=2),category,sep='_'),category)))
+gsa <- read_csv(gsa_fp,skip = 1,show_col_types=FALSE)
+zg <- read_csv(zg_fp,show_col_types=FALSE)
+```
+
+Loading the files input dataframes and getting rid of extra header rows. Fixing some of the values in the GDP dataset to prevent duplicates for future pivoting
+
+#### Tidying GDP input
+
+```{r gdp_tidy}
+colnames(gdp) <- c('Line','category',paste('_',unlist(str_extract_all(colnames(gdp),'\\d.+')),sep=''))
+gdp_long <- gdp |>
+    filter(Line != 'Line') |>
+    select(!Line) |>
+    pivot_longer(cols=!category, names_to = 'month',values_to='values',values_transform = as.numeric) |>
+  mutate(year = gsub('_(\\d{4}).{3}(\\d+)','\\1',month)) |>
+  group_by(category,year) |>
+  mutate(qtr = 1:n()) |>
+  ungroup()
+
+gdp_long$values_scaled <- scale(gdp_long$values)
+gdp_long$date <- as.Date(paste(gdp_long$year,str_pad(as.character(3*gdp_long$qtr),width=2,side='left',pad='0'),01,sep='-'))
+
+gdp_long$quarter <- paste(gdp_long$year,gdp_long$qtr,sep='-')
+subtotals <- c('gross domestic product','personal consumption expenditures','gross private domestic investment','goods','fixed investment','nonresidential','exports','imports','government consumption expenditures and gross investment','federal','net exports of goods and services')
+gdp_tidy <- gdp_long |> select(matches('category|^values$|date')) |>
+  filter(!(str_to_lower(category) %in% subtotals)) |>
+  group_by(category, date) %>%
+  mutate(row = row_number()) |>
+  pivot_wider(names_from=category,values_from = values) %>%
+  select(-row)
+```
+
+The GDP input file needs to be lengthened by pivoting the date columns into one row which will allow us to do some initial comparisons over time across all of the numerical components of GDP. There was some additional preparation needed to create date values given that each column was representing a quarter yet it was not uniquely labeled in the input source. Further pivoting was needed to make the data "tidy" in accordance with the format that is recommended within the tidyverse and will also be useful for correlation calculations. Lastly, I scaled the values given that different categories have some disparity and it would make it easier to see trends across all components of GDP.
+
+#### Correlation Matrix of all GDP Components
+
+```{r}
+#http://www.sthda.com/english/wiki/ggplot2-quick-correlation-matrix-heatmap-r-software-and-data-visualization
+
+gdp_num_tidy <- gdp_tidy |> ungroup() |> select(-date)
+cor_mat <- round(cor(gdp_num_tidy),2)
+reshaped_cor <- melt(cor_mat)
+ggplot(data = reshaped_cor, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile() +
+  theme(axis.text.x = element_text(angle=90,hjust=0.9))
+```
+
+The correlation heatmap is an interesting way to depict linear relationships across more than 2 variables although it can sometimes be hard to spot a clear pattern depending on color gradients.
+
+#### Trend Analysis
+
+```{r}
+gdp_long |>
+    filter(!(str_to_lower(category) %in% subtotals)) %>%
+ ggplot(aes(x=date,y=values_scaled)) +
+    geom_line()+
+    theme(axis.text.x = element_text(angle=45,hjust=0.9))+
+    facet_wrap(~category)
+```
+
+GDP Questions posed in the dicusssion board post.
+
+1. Do all categories trend at the same rate? No, it's clear that the underlying categories that make up GDP do not trend all together which makes sense. Services based on a simple time series plot is the only component that had a dramatic change in direction/slope of the trend line over the time period available in this dataset. The remainder of the factors were somewhat flat over the 26 months included in the data set
+
+2. What is the overall trend of the data? Many of the categories do not have a clear pattern or trend, but there appears to be a very slight upward relationship and given this period represents the end of pandemic lockdowns for many states it somewhat makes sense
+.
+3. Is there any noticeable lag correlation between any of the GDP categories? It is not particularly clear from the data itself that there are lagged categories. Further analysis would need to be done to confirm if that is the case.
+
+
+#### Zillow Tidying Process
+
+The goal: Determine if the average price of a house in NYC is decreasing or increasing compared to one year ago
+
+```{r}
+zg_tidy <- zg |>
+    filter(RegionName == 'New York, NY') |>
+    select(matches('RegionName|\\d{4}-\\d{2}-\\d{2}')) |>
+    pivot_longer(!RegionName,names_to='price_month',names_transform= as.Date, values_to='median_monthly_price') |>
+    mutate(monthly_perc_chg = (median_monthly_price - lag(median_monthly_price))/lag(median_monthly_price),
+           six_mo_yoy = (median_monthly_price -lag(median_monthly_price,n=6,order_by=price_month))/lag(median_monthly_price,n=6,order_by=price_month),
+           twelve_mo_yoy = (median_monthly_price -lag(median_monthly_price,n=12,order_by=price_month))/lag(median_monthly_price,n=12,order_by=price_month)
+           )
+```
+
+This dataset was fairly easy to turn into a tidy dataset despite it's initial width. The file tracked median monthly prices for a number of real estate markets within the US. Besides one year time frames I also calculated monthly, 6-month, and 12-month year over year percentage changes to provide an interesting alternative statistic.
+
+#### Review of Median Prices time series
+
+```{r}
+ggplot(zg_tidy,aes(x=price_month,y=median_monthly_price)) +
+    geom_line() +
+    geom_smooth() +
+    theme(axis.text.x = element_text(angle=90,hjust=0.9))
+```
+
+NYC prices have had a clear positive relationship over time and when looking over a year time frame it is quite clear that overall prices have continued to increase
+
+#### Percentage Change over Time
+
+```{r}
+prc_chg <- ggplot(zg_tidy,aes(x=price_month)) +
+    geom_line(aes(y=monthly_perc_chg)) +
+    geom_line(aes(y=six_mo_yoy),color='red') +
+    geom_line(aes(y=twelve_mo_yoy),color='blue') + 
+    theme(axis.text.x = element_text(angle=90,hjust=0.9),legend.position="top")
+```
+
+By breaking down the time window that we are comparing for the median house prices there are some additional patterns evident in the data. Despite the general upward increase in prices overall from January 2021 until January 2022 there were year over year decreases before changing direction throughout most of that year. Prices in the city continue to rise but there are more short term price fluctuations that will occur depending on the state of the economy, mortgage rates, and many other factors.
+
+
+#### GSA Per Diem Rates
+
+Requested Analysis: There's a wide range of analyses that could be performed on this dataset such as comparing how per diem rates vary by State and identifying the top N counties with the highest per diem rates.
+
+#### Preliminary Tidying
+
+```{r}
+gsa_clean <- gsa %>%
+  filter(!is.na(STATE)) %>%
+  mutate(lodging_fy23 = as.numeric(str_replace(`FY22 Lodging Rate`,'[$]','')),
+           meals_fy23 = as.numeric(str_replace(`FY22 M&IE`,'[$]',''))) %>%
+    group_by(STATE,DESTINATION) %>%
+      mutate(row_part = row_number())
+    
+```
+
+
+#### County per diem distributions
+
+```{r}
+gsa_clean |>
+    group_by(STATE,DESTINATION) |>
+    summarize(total = n()) |>
+    arrange(desc(total)) %>%
+    ggplot(aes(x=total)) +
+    geom_histogram(binwidth = 1)
+```
+
+Given the wide range and inconsistency of tracked values by county, it would be easiest to compare across states by averaging any values by county and then taking the average of each state. Even comparing across counties, it would be easier given discrepancies in reporting for each location. In this case, it didn't seem to add value to expand the length to capture the missing quarters.
+
+#### Average State Per Diem Rates
+
+```{r}
+gsa_clean |>
+  group_by(STATE,DESTINATION) |>
+  mutate(county_mean_lodging = mean(lodging_fy23,na.rm=TRUE),
+         county_mean_meals = mean(meals_fy23,na.rm=TRUE)) |>
+  group_by(STATE) |>
+  summarise(state_avg_lodging = mean(county_mean_lodging),
+         state_avg_meals = mean(county_mean_meals)) %>%
+  ggplot(aes(x=state_avg_lodging,y=state_avg_meals)) +
+  geom_point(stat='identity') +
+  geom_smooth(method='lm') +
+  geom_text(aes(label=STATE),vjust=1, size=3) +
+  labs(title= 'Average State Per Diem Rates')
+  
+```
+
+The scatterplot shows that with higher average lodging per diem rates there are typically higher average meal per diem rates during the fiscal year 2022. The mixture of states with the highest per diem rates are somewhat surprising as I would have expected NY and CA to separate from the rest of the states rather than Washington DC. Wyoming is also another somewhat surprising value towards the top of the lodging cost, but perhaps that is somewhat explainable due to less hotels available throughout the state.
+
+#### Top Per Diem Rates by County
+
+```{r}
+gsa_clean |>
+  group_by(STATE,DESTINATION) |>
+  mutate(county_mean_lodging = mean(lodging_fy23,na.rm=TRUE),
+         county_mean_meals = mean(meals_fy23,na.rm=TRUE)) |>
+  ungroup(STATE,DESTINATION) |>
+  mutate(county_lodging_rank = rank(-county_mean_lodging,ties.method = ),
+         county_meals_rank = rank(-county_mean_meals)) %>%
+  filter(county_lodging_rank<=50 | county_meals_rank<=50) %>%
+  ggplot(aes(x=county_mean_lodging,y=county_mean_meals))+
+  geom_point() +
+  geom_text(aes(label=DESTINATION),hjust=1, size=2,angle=45) +
+  labs(title= 'The Top 50 Per Diem Rates by County')
+
+```
+
+By looking at county scatterplots the expected high cost locations are at the top of the rankings in terms of per diem which makes complete sense. Many of these counties are all in the metro San Francisco area, but Boston, NYC, and DC also are in the top 50
