@@ -1,0 +1,60 @@
+---
+title: 'Data607: Assignment 7'
+author: 'jfor: Josh Forster'
+date: "2022-10-16"
+output: html_document
+---
+
+
+## Working with XML,HTML and JSON in R
+
+
+#### Load Libraries
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(XML)
+library(jsonlite)
+library(RCurl)
+```
+
+It was fairly easy to create the book formats using a text editor tool in each of the 3 structures requested which are typical of web data. It is interesting to see the default package behavior for loading nested data (authors) and a few different syntax formats within R
+
+#### Load XML input source into DataFrame
+
+```{r load_xml_data}
+xml_fp <- 'https://raw.githubusercontent.com/jforster19/DATA607/main/books.xml'
+xmldata_pull <- RCurl::getURL(xml_fp)
+xml_input <- XML::xmlParse(xmldata_pull)
+xml_df <- XML::xmlToDataFrame(xmldata_pull)
+head(xml_df)
+```
+As the output demonstrates there is a slight difference in the generated dataframe which can easily be processing via string manipulation. All of the author names are concatenated together without any spaces, but perhaps this is driven off the design of my XML input.
+
+#### Load HMTL
+
+```{r}
+html_fp <- 'https://raw.githubusercontent.com/jforster19/DATA607/main/books.html'
+html_download <- RCurl::getURL(html_fp)
+html_df <- XML::readHTMLTable(html_download,header=TRUE,as.data.frame = TRUE)
+head(html_df)
+
+```
+
+With the HTML Table I specifically added the authors as separate rows within the table expecting them to be parsed and if the books need to be uniquely identified by row there could easily be aggregation with a concatenated author field to account for this 1 to many relationship.
+
+
+#### Load JSON
+
+```{r}
+json_fp <- 'https://raw.githubusercontent.com/jforster19/DATA607/main/books.json'
+json_download <- RCurl::getURL(json_fp)
+json_df <- jsonlite::fromJSON(json_download)
+json_df2 <- tidyr::unnest(json_df,col=authors)
+head(json_df2)
+```
+
+
+The major differences with the JSON input file is that by default the nested lists are not treated the same way as XML although Tidy packages have some easy ways to parse out that information. When there are different numbers of values in these nested lists it appears it is safer to first parse wider and then pivot the data, but if there are large datasets that can be computationally expensive. JSON files make it easier with imputed data types of columns, only format where it recognized numeric type of price field, and that can be much easier when you have more complex JSON structure.
+
