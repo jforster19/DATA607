@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<books>
+  <book>
+    <title>The Hot Hand</title>
+    <authors>
+      <author1>Ben Cohen</author1>
+    </authors>
+    <pages>304</pages>
+    <release_year>2019</release_year>
+    <price>15.15</price>
+  </book>
+  <book>
+    <title>Basketball: A Love Story</title>
+    <authors>
+      <author1>Rafe Bartholomew</author1>
+      <author2>Dan Klores</author2>
+      <author3>Jackie MacMullan</author3>
+    </authors>
+    <pages>448</pages>
+    <release_year>2018</release_year>
+    <price>18.00</price>
+  </book>
+  <book>
+    <title>The Book of Basketball</title>
+    <authors>
+      <author1>Bill Simmons</author1>
+    </authors>
+    <pages>752</pages>
+    <release_year>2009</release_year>
+    <price>15.99</price>
+  </book>
+</books>
