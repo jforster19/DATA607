@@ -1,0 +1,43 @@
+---
+title: "Data607 Assignment 8"
+author: 'jfor: Josh Forster'
+date: "2022-10-26"
+output: html_document
+---
+
+#### Utilizing APIS from NY Times
+
+#### Load Libraries
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(httr)
+library(jsonlite)
+```
+
+#### Make Get Request from NY Times books API
+
+```{r make_get_request}
+key = rstudioapi::askForPassword('Please enter your password:')
+best_sellers <- httr::GET(paste0('https://api.nytimes.com/svc/books/v3/lists/best-sellers/history.json?api-key=',key))
+book_text = content(best_sellers,as='text')
+books_data <- jsonlite::fromJSON(book_text)
+books_df <- books_data$results
+```
+
+#### Tidy some of the nested columns into separate columns
+
+```{r}
+unnested_books <- books_df |> tidyr::unnest(cols=c(isbns,reviews),keep_empty = TRUE)
+head(unnested_books)
+```
+#### Diplay historical rankings for best sellers list
+
+```{r}
+books_df |> tidyr::unnest(cols=c(ranks_history),keep_empty = TRUE) |> 
+    dplyr::arrange(rank)
+```
+
+Overall, it is fairly easy to load JSON data from an API into a dataframe to prepare for further analysis with minimal lines of codes needed.
+
