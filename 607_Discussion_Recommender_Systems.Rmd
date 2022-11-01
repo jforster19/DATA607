@@ -1,0 +1,56 @@
+---
+title: 'Data607: Content Recommendation'
+author: 'jfor: Josh Forster'
+date: "2022-11-01"
+output: html_document
+---
+
+
+## Tinder Recommendation System
+
+Your task is to analyze an existing recommender system that you find interesting.  You should:
+
+Perform a Scenario Design analysis as described below.  Consider whether it makes sense for your selected recommender system to perform scenario design twice, once for the organization (e.g. Amazon.com) and once for the organization's customers.
+Attempt to reverse engineer what you can about the site, from the site interface and any available information that you can find on the Internet or elsewhere.
+Include specific recommendations about how to improve the site's recommendation capabilities going forward. 
+Create your report using an R Markdown file, and create a discussion thread with a link to the GitHub repo where your Markdown file notebook resides.  You are not expected to need to write code for this discussion assignment.
+
+
+Your task is to:
+
+Background:
+
+Tinder is a social application designed to pair individuals together and will allow the users to interact should they both swipe right on each other's profiles. The users typically make those decisions based off of profiles, images, and bios that are shared publicly from the profile.
+
+Identify a recommender system web site, then
+Answer the three scenario design questions for this web site. 
+
+#### Who are your target users?
+
+Customers: Other individuals that have similar interests that they would find appealing
+
+Organization: Any individual that is looking for love, romance, dating, social interaction.
+
+
+#### What are their key goals?
+
+Customer: Find suitable matches to socialize or date depending on their preference at that current moment. Find others that they don't already know that they would be interested in and have commonalities with from the get go and find appealing/attractive.
+.
+Organization: Tinder's target goals are designed to pair users with other people that they are interested in seeing and maximize the chance they pair with others. They want to increase the accuracy that the system can get someone to swipe right on other profiles that are presented to them. Improve the precision and accuracy of swipers to select swipees by finding similar individuals that a person would likely choose to match based on their selection
+
+#### How can you help them accomplish those goals
+
+Customer: By putting an authentic profile and using the app to honestly pick profiles that they would be interested in.
+
+Organization: By encouraging their large pipeline of candidates to match for other social purposes to encourage people to meeting/socialize in groups.
+
+
+#### Reverse Engineering
+
+The app is completely designed around precise and accurate recommendations and their chief data scientist has openly discussed how they have utilized machine learning to improve the accuracy of their predictions. One of the important strategies they have employed given the scale of their data is to use embeddings for each swipee that are meant to simplify the ability to compare users that a swiper can potentially interact with on the platform. The algorithm is then designed to suggest similar other users based on how the user has swiped on similar profiles in the past. This method of content recommendation is reliant on past data and a large database of potential users to choose from to be successful. It clusters the users based on the embedding similarities allowing for distance based calculations and easier comparisons to suggest the next possible match.
+
+The embeddings are reliant on successful NLP processing to accurately parse the words that will be used to generate the embeddings. There are neural network models that are designed to create embeddings based on these keywords to be able to compare profiles in this way. One that is referenced in Tinder's public postings is called Word2Vec which transforms words into vectors which are ultimately the inputs in the embedding process.
+
+#### Suggestions for possible improvement
+
+Although the models employed at Tinder seem to be strong at predicting probable matches, there is definitely some superficial nature to creating profiles and often judging off other users rather quickly if they are a match or not. One interesting concept would be encouraging users in close proximity to engage in activities in a larger group setting to let people with similar interests more organically meet one another. Match.com probably has created some form of this type of event to encourage single people to meet, but perhaps Tinder could use what it has learned about a group of users to encourage one another to meet and socialize without just judging what is provided in the profile. The company seems to be starting to encourage this type of behavior given it built a new feature for festivals to encourage groups of people to meet each other that are going to the same types of events; however, there is no reason why they can't sponsor activities based on similar interests learned from the embeddings of each profile. It seems like a win-win in terms of a premium feature that users would want to participate in where there are several matches available to interact with at any one time
