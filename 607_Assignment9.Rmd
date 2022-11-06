@@ -1,0 +1,184 @@
+---
+title: 'Data607: Assignment Sentiment Analysis'
+author: 'jfor: Josh Forster'
+date: "2022-11-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#### Load Libraries
+
+```{r libraries}
+library(tidyverse)
+library(tidytext)
+library(textdata)
+library(janeaustenr)
+library(dplyr)
+library(stringr)
+```
+
+#### Mirroring Text Mining with R
+
+[Source](https://www.tidytextmining.com/sentiment.html): "Text Mining with R: A Tidy Approach" by Julia Silge and David Robinson 
+
+#### Get Sentiment of Jane Austen books 
+as shown in Text Mining with R
+```{r jane_austen}
+
+get_sentiments("afinn")
+tidy_books <- austen_books() %>%
+  group_by(book) %>%
+  mutate(
+    linenumber = row_number(),
+    chapter = cumsum(str_detect(text, 
+                                regex("^chapter [\\divxlc]", 
+                                      ignore_case = TRUE)))) %>%
+  ungroup() %>%
+  unnest_tokens(word, text)
+```
+
+
+#### Review sentiment of specifying books and compare different sentiment models
+as shown in Text Mining with R
+```{r}
+nrc_joy <- get_sentiments("nrc") %>% 
+  filter(sentiment == "joy")
+
+tidy_books %>%
+  filter(book == "Emma") %>%
+  inner_join(nrc_joy) %>%
+  count(word, sort = TRUE)
+
+jane_austen_sentiment <- tidy_books %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(book, index = linenumber %/% 80, sentiment) %>%
+  pivot_wider(names_from = sentiment, values_from = n, values_fill = 0) %>% 
+  mutate(sentiment = positive - negative)
+
+ggplot(jane_austen_sentiment, aes(index, sentiment, fill = book)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~book, ncol = 2, scales = "free_x")
+```
+
+
+#### Comparison of sentiment models across same corpus
+as shown in Text Mining with R
+```{r}
+
+
+pride_prejudice <- tidy_books %>% 
+  filter(book == "Pride & Prejudice")
+
+pride_prejudice
+
+
+afinn <- pride_prejudice %>% 
+  inner_join(get_sentiments("afinn")) %>% 
+  group_by(index = linenumber %/% 80) %>% 
+  summarise(sentiment = sum(value)) %>% 
+  mutate(method = "AFINN")
+
+bing_and_nrc <- bind_rows(
+  pride_prejudice %>% 
+    inner_join(get_sentiments("bing")) %>%
+    mutate(method = "Bing et al."),
+  pride_prejudice %>% 
+    inner_join(get_sentiments("nrc") %>% 
+                 filter(sentiment %in% c("positive", 
+                                         "negative"))
+    ) %>%
+    mutate(method = "NRC")) %>%
+  count(method, index = linenumber %/% 80, sentiment) %>%
+  pivot_wider(names_from = sentiment,
+              values_from = n,
+              values_fill = 0) %>% 
+  mutate(sentiment = positive - negative)
+
+bind_rows(afinn, 
+          bing_and_nrc) %>%
+  ggplot(aes(index, sentiment, fill = method)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~method, ncol = 1, scales = "free_y")
+```
+
+
+#### Load Stanford movie reviews dataset
+Potts, Christopher. 2011. On the negativity of negation. In Nan Li and
+David Lutz, eds., Proceedings of Semantics and Linguistic Theory 20,
+636-659.
+```{r}
+load_reviews <- function(filepath,id) {
+    file_str <- readr::read_file(filepath)
+    if (str_detect(filepath,'pos')){
+        sentiment <- 'positive'
+    }
+    else{
+        sentiment <- 'negative'
+    }
+  df <- data.frame(id,gsub('.*/(.*)$','\\1',filepath),file_str,sentiment)
+  cols = c('id','filename','text','load_sentiment')
+  colnames(df) <- cols
+  return(df)
+}
+#comment out below line if data is already loaded
+mov_reviews <- textdata::dataset_imdb(dir= './Data',split='train')
+pos_files <- list.files("./Data/imdb/aclImdb/train/pos", pattern="*.txt", full.names=TRUE)[1:10]
+neg_files <- list.files("./Data/imdb/aclImdb/train/neg", pattern="*.txt", full.names=TRUE)[1:10]
+
+df_reviews <- bind_rows(map2(c(pos_files[0:10],neg_files[0:10]),1:length(c(pos_files,neg_files)), load_reviews))
+```
+
+#### Compare pre-labeled dataset against two tidytext sentiment models
+
+```{r}
+df_word_detail <- df_reviews %>%
+  group_by(filename) %>%
+  mutate(
+    linenumber = row_number()) %>%
+  ungroup() %>%
+  unnest_tokens(word, text)
+
+
+sentiment_reviews <- bind_rows(
+  df_word_detail %>% 
+    inner_join(get_sentiments("bing")) %>%
+    mutate(method = "Bing et al."),
+  df_word_detail %>% 
+    inner_join(get_sentiments("nrc") %>% 
+                 filter(sentiment %in% c("positive", 
+                                         "negative"))
+    ) %>%
+    mutate(method = "NRC")) %>%
+  count(method, index = filename, sentiment) %>%
+  pivot_wider(names_from = sentiment,
+              values_from = n,
+              values_fill = 0) %>% 
+  mutate(sentiment = positive - negative) |>
+  inner_join(df_reviews,by=c('index'='filename')) |>
+      select(-c(id,text))
+
+sentiment_reviews %>%
+ggplot(aes(index, sentiment, fill = method)) +
+  geom_col(show.legend = FALSE) +
+  geom_text(aes(label = load_sentiment),color='black',size=2,position=position_dodge(.9))+
+  theme(axis.text.x = element_text(angle=90,hjust=0.9))+
+  facet_wrap(~method, ncol = 1, scales = "free_y")
+
+sentiment_reviews |>
+    mutate(sentiment_match = if_else(sentiment==0,'N',if_else(sentiment<0,if_else(load_sentiment=='negative','Y','N'),if_else(load_sentiment=='positive','Y','N'))),total = n()/2) |> 
+    group_by(sentiment_match,method) |>
+    summarize(cnt = n(),match_perc=cnt/total) |>
+    distinct(sentiment_match,method,cnt,match_perc) |>
+    arrange(method)
+
+```
+
+The graph displays the total sentiment by individual word and although it presents the pre-labeled data it is not intuitive which sentiment model performed better than the other compared to what the expected results should have been. Therefore as a separate output when looking at the correct sentiment classification it appears that the Bing model far outperformed the NRC model with this specific movie review corpus. 
+
+#### Why is there such a discrepany of this magnitude?
+
+There could be several reasons why there were different results, but perhaps the NRC did not train on as many words that were contained in these reviews thereby losing out on impactful words that might correctly drive sentiment. Alternatively, there could have been slightly unexpected usage of words or potential sarcasm that the model may not have taken into account by considering each individual word.
+
